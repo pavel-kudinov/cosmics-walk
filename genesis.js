@@ -17,15 +17,12 @@ Scope({
 		
 		this.Genesis.start();
 		
-		
-		
 		loop( 2, {
 			animate: () => {
 				this.Genesis.animate();
 			},
 			render : () => {
 				this.Genesis.render();
-				
 				this.Render .animate();
 			},
 		});

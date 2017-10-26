@@ -1,0 +1,272 @@
+module.exports = {
+	'void .remove()': `
+		.nodes { .delete(); };
+		.links { .delete(); };
+		.delete();
+	`,
+	
+	nodes  : ['Node   @body'],
+	links  : ['Link   @body'],
+	
+	genome : 'Genome',
+	
+	
+	Node: {
+		MAX: Scope_MAX_BIG,
+		
+		i     : 'int',
+		pos   : 'float2',
+		cpow  : 'float',
+		mass  : 'float',
+		valent: 'int',
+		
+		
+		shift : 'float',
+		
+		
+		strong: 'float',
+		
+		'void .setStrong( float strong )': `
+			if ( strong < 1   ) strong = 1;
+			if ( strong > 2.5 ) strong = 2.5;
+			.strong = strong;
+			.cpow   = node_cpow * .strong;
+			.mass   = .strong;
+		`,
+	},
+	
+	Link: {
+		MAX: Scope_MAX_BIG * 2.5,
+		
+		i: 'int',
+		
+		f: 'Node @[links_f]',
+		t: 'Node @[links_t]',
+		
+		dist  : 'float',
+		pow   : 'float',
+		damp  : 'float',
+		robust: 'float',
+		
+		'void .setStrong( float strong )': `
+			.pow    = link_pow  * strong;
+			.damp   = link_damp * strong;
+		`,
+	},
+	
+	'float2 generateDist': [1,2],
+	'float tStep'        : 1/10,
+	
+	'some .addNodeToPerimeter()': `
+		
+		some body = .;
+		
+		if ( !body.nodes.length ){
+			body.nodes.new {
+				
+				.i      = body.nodes.length - 1;
+				.setStrong( 1 );
+				.valent = 6;
+				
+				.pos    = {0,0};
+				
+				return .;
+			};
+		}else{
+			body.nodes.roundRobin( Random.getInt( body.nodes.length ), int x ) {
+				some pnode = .;
+				
+				
+				if ( pnode.valent > 0 ){
+					
+					
+					float2 gd  = generateDist;
+					float  gdx = gd.x;
+					float  gdy = gd.y;
+					
+					float tRadius = ( gdx + gdy ) / 2;
+					
+					
+					
+					float tStart = Random.get();
+					float tShift = 0;
+					
+					while ( tShift < 1  ){
+						float t = tStart + tShift;
+						tShift += tStep;
+						
+						
+						float2 pos = pnode.pos + rt2xy( tRadius, t );
+						
+						int tooClose    = 0;
+						int nearAndFree = 0;
+						
+						body.nodes {
+							if ( length(pos - .pos) < gdx ){
+								tooClose++;
+								
+							
+							}else if( length(pos - .pos) < gdy && .valent>0 ){
+								nearAndFree++;
+							};
+						};
+						
+						if ( !tooClose && nearAndFree >= ( body.nodes.length > 1 ? 2 : 1 ) ){
+							
+							body.nodes.new( Random.getInt( body.nodes.length ) ) {
+								
+								.i      = body.nodes.length - 1;
+								.setStrong(1);
+								.valent = 6;
+								
+								some newNode = .;
+								
+								newNode.pos = pos;
+								
+								body.nodes {
+									if ( .i != newNode.i ){
+										some nearNode = .;
+										
+										float dist = length( pos - nearNode.pos );
+										
+										if (
+											   
+											   dist            >= gdx
+											&& dist            <= gdy
+											&&  newNode.valent   > 0
+											&&  nearNode.valent  > 0
+										){
+											body.links.new {
+												.i      = body.links.length - 1;
+												.setStrong( 1 );
+												
+												
+												.f    = newNode ;  .f.valent--;
+												.t    = nearNode;  .t.valent--;
+												
+												.dist = length( .f.pos - .t.pos );
+											};
+										};
+									};
+								};
+								
+								return .;
+							};
+							
+							
+							int u = 0; body.nodes { .i = u++; };
+						};
+					};
+				};
+			};
+			
+			printf("+");
+		};
+	`,
+	
+	
+	'some .clone()': `
+		some source = .;
+		
+		Self.new {
+			some body   = .;
+			
+			.nodes.allocate( source.nodes.length, int x ) {
+				some gen = source.nodes[x];
+				
+				.i      = x;
+				
+				.pos    = gen.pos;
+				.cpow   = gen.cpow;
+				.mass   = gen.mass;
+				
+				.setStrong( gen.strong );
+				
+				.valent = gen.valent;
+			};
+			
+			.links.allocate( source.links.length, int x ) {
+				some gen2 = source.links[x];
+				
+				.i    = x;
+				
+				.f    = body.nodes[ gen2.f.i ];
+				.t    = body.nodes[ gen2.t.i ];
+				
+				.dist   = gen2.dist;
+				.pow    = gen2.pow ;
+				.damp   = gen2.damp;
+				.robust = gen2.robust;
+			};
+			
+			return .;
+		};
+	`,
+	
+	'some generate()': `
+		Self.new {
+			int to = Random.between( nodesCount );
+			for ( int j = 0; j < to ; j++ ){
+				.addNodeToPerimeter();
+			};
+			
+			.nodes.vectorize();
+			.links.vectorize();
+			
+			return .;
+		};
+	`,
+	
+	
+	
+	'float mutateRate_addNode'       : 0.35,
+	'int2  mutateRate_addNodeC'      : [1,3],
+	
+	'float mutateRate_removeNode'     : 0.05,
+	
+	'float mutateRate_changeStrong'  : 0.3,
+	'int2  mutateRate_changeStrongC' : [1,3],
+	'float muTempStrong'             : 1,
+	
+	'void .mutate()': `
+		float mutat2 = Random.get() * muTemp;
+		
+		if ( Random.get() < mutateRate_addNode ){
+			int pC = Random.between( mutateRate_addNodeC );
+			for ( int p = 0; p < pC; p++ ){
+				.addNodeToPerimeter();
+			};
+			
+			.addNodeToPerimeter();
+			
+			.nodes.vectorize();
+			.links.vectorize();
+		};
+		
+		if ( Random.get() > mutateRate_removeNode ){
+			
+		};
+		
+		
+		if ( Random.get() > mutateRate_changeStrong ){
+			
+			int pC = Random.between( mutateRate_changeStrongC );
+			for ( int p = 0; p < pC; p++ ){
+				
+				some node = .nodes[ Random.getInt(.nodes.length) ];
+				
+				float mutat = 1 + Random.get() * muTempStrong;
+				node.strong *= __powf( mutat, Random.get() * 2 - 1 );
+				
+				
+				
+			};
+			
+			.links {
+				float strong = ( .f.strong + .t.strong ) / 2;
+				.setStrong( strong );
+			};
+		};
+		
+	`,
+};

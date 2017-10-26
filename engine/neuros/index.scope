@@ -1,0 +1,90 @@
+module.exports = {
+	'int neurovisor': 1,
+	
+	Node: {
+		MAX  : Scope_MAX_BIG * 2,
+		
+		pos  : 'vbo float2',
+		rgb  : 'vbo float3',
+		
+		v    : 'float',
+		v_   : 'float',
+		k    : 'float',
+		frict: 'float',
+		speed: 'float',
+	},
+	
+	Link: {
+		MAX: Scope_MAX_BIG * 2.5 * 2,
+		
+		pos  : 'vbo float2 f,t',
+		rgb  : 'vbo float3 f,t',
+		
+		v: 'float',
+		k: 'float',
+		
+		f: 'Node',
+		t: 'Node',
+	},
+	
+	go(){
+		if ( this.neurovisor ){
+			this.Render.lCloud( [ this.Link, 'pos', 'rgb' ], { material: { linewidth: 1 }, force: [0,1] } );
+			this.Render.pCloud( [ this.Node, 'pos', 'rgb' ], { force: [0,1] } );
+		};
+	},
+	
+	'float unit( float v )': `
+		if ( v >  1 ) v =  1;
+		if ( v < -1 ) v = -1;
+		return v;
+	`,
+	
+	animate(){
+		this.Link(`
+			.v      = unit( .f.v * .k );
+			.t.v_ +== .v;
+		`);
+		
+		this.Node(`
+			.v  = unit( .v  * .frict + unit( .v_ * .k ) * .speed );
+			.v_ = 0;
+		`);
+	},
+	
+	render(){
+		if ( this.neurovisor ){
+			this.preRender();
+		};
+	},
+	
+	'float3 unit2rwg( float v )': `
+		float3 rgb;
+		
+		if ( v > 0 ){
+			rgb.x = 1 - v;
+			rgb.y = 1;
+			rgb.z = 1 - v;
+		}else{
+			rgb.x = 1;
+			rgb.y = 1 + v;
+			rgb.z = 1 + v;
+		};
+		
+		return rgb;
+	`,
+	
+	preRender(){
+		this.Node(`
+			.rgb   = unit2rwg( .v );
+		`);
+		
+		this.Link(`
+			.rgb.f = .f.rgb;
+			.rgb.t = unit2rwg( .v );
+			
+			.pos.f = .f.pos;
+			.pos.t = .t.pos;
+		`);
+	},
+};

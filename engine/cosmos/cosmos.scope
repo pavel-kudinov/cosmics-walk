@@ -1,0 +1,282 @@
+var iir = 0;
+
+var inter     = 0;
+var interstep = 25;
+
+
+module.exports = {
+	CF: {
+		v: 'float',
+		go(){ this(1000,` Self.new { }; `); },
+	},
+	
+	'int cheatsteps'  : 1,
+	'int tiesteps'    : 4,
+	'float movek'     : 0.0025,
+	'float frict'     : 0.995,
+	'float cdist'     : 1.99,
+	
+	
+	'float fluid'       : 0,
+	'float fluid_k2'    : 0.1,
+	'float fluid_pow'   : 2.5,
+	'float windangle'   : 1/6,
+	'float wind_maxpart': 2.5,
+	
+	'int check_robust'          : 0,
+	'int check_robust_intersect': 0,
+	
+	'int fl_collide': 1,
+	
+	Light: {
+		
+		
+		'int show_cde'    :   0, 
+		'float cde'       : 0.1,
+		'float sde'       : 0.0, 
+		'float atan_white': 0.0, 
+	},
+	
+	
+	go(){
+		this.Render.lCloud( [ this.Link, 'pos','rgb' ], {
+			material: {
+				linewidth  : 1,
+				opacity    : 1,
+				transparent: false,
+			}
+		} );
+		
+		this.Render.pCloud( [ this.Link, 'vnode_pos','vnode_rgb' ] );
+		this.Render.pCloud( [ this.Node, 'pos','rgb' ] );
+		
+		
+	},
+	
+	Link: {
+		MAX: Scope_MAX_BIG * 2.5,
+		
+		vnode_pos: 'vbo float2',
+		vnode_rgb: 'vbo float3',
+		
+		f: 'Node',
+		t: 'Node',
+		
+		pos  : 'vbo float2 f,t',
+		rgb  : 'vbo float3 f,t',
+		
+		dist  : 'float',
+		
+		pow   : 'float',
+		damp  : 'float',
+		tonus : 'float',
+		robust: 'float',
+		cde   : 'float',
+		sde   : 'float',
+	},
+	
+	Node: {
+		MAX: Scope_MAX_BIG,
+		
+		Collider: (use('collider'))({
+			'float gridstep': 2,
+			
+			
+			'float2 iPos         ( int _i             )': `return Node[ _i ].pos;`,
+			'void   additive     ( int _i, float2 vel )': `       Node[ _i ].vel += vel / Node[ _i ].mass;`,
+			'float2 collideCells ( int fi, int ti, float dist, float2 dpos )': `
+				if ( Node[ fi ].subspace == Node[ ti ].subspace ){
+					return ( Node[ fi ].cpow + Node[ ti ].cpow ) * ( cdist - dist ) * dpos / dist;
+				}else{
+					return {0,0};
+				};
+			`,
+		}),
+		
+		
+		gpos : 'float',
+		
+		pos  : 'vbo float2',
+		rgb  : 'vbo float3',
+		
+		mass : 'float',
+		
+		vel  : 'float2',
+		vel2 : 'float2',
+		
+		
+		cpow      : 'float',
+		windshield: 'float',
+		
+		cde       : 'float',
+		sde       : 'float',
+		
+		subspace: 'int', 
+		
+		
+		
+	},
+
+	
+	'float sdeFactor': 0.1,
+	render(code) {
+		if ( this.Light.cde || this.Light.sde ){
+			this.Link(`
+				.sde           +=  .cde;
+				
+				.f.cde         +== .cde;
+				.t.cde         +== .cde;
+				
+				
+			`);
+			
+			this.Node(`
+				
+				.sde += .cde;
+				
+			`)
+		};
+		
+		if ( code ) code();
+		
+		if ( this.Light.show_cde ){
+			if ( this.Light.cde ){ 
+				this.Node(`
+					.rgb = t2rgb( ( .cde * Light.cde ) );
+				`);
+			};
+			
+			if ( this.Light.sde ){ 
+				this.Node(`
+					.rgb = t2rgb( ( .sde * Light.sde ) );
+				`);
+			};
+			
+			if ( this.Light.atan_white ){
+				this.Node(`
+					float speed = length( .vel );
+					float w     = speed * Light.atan_white;
+					
+					if ( w<0 ) w = 0;
+					if ( w>1 ) w = 1;
+					
+					.rgb = tw2rgbw( atan2( .vel.y / speed, .vel.x   speed ) / 2 / 3.1415926, 1-w);
+					
+				`);
+			};
+		};
+		
+		this.Link(`
+			.pos.f = .f.pos;
+			.pos.t = .t.pos;
+			
+			.rgb.f = .f.rgb;
+			.rgb.t = .t.rgb;
+			
+			
+			
+			.vnode_pos = ( .pos.f + .pos.t ) / 2.0f;
+			.vnode_rgb = ( .rgb.f + .rgb.t ) / 2.0f;
+		`);
+		
+		
+	},
+	
+	
+	animate(code){ this._animate(); },
+	_animate(code){
+		this.tick(code);
+		this.render();
+	},
+	
+	tick(code){
+		if ( this.Light.cde > 0 ) this.Node(`.cde = 0`);
+		
+		for (var step = 0; step < this.cheatsteps; step++){
+			
+			
+			if ( this.fl_collide ){
+				this.Node.Collider.buildGrid();
+				this.Node.Collider.collide();
+				
+				
+				
+				this.Link(`
+					float2 dpos = .t.pos - .f.pos;
+					float  dist = length( dpos );
+					
+					if (dist < cdist){
+						float2 norm  = dpos / dist;
+						float2 force = ( .t.cpow + .f.cpow ) * ( cdist - dist ) * norm;
+						
+						
+						if ( isfinite(force) ){
+							.f.vel +== force / .f.mass;
+							.t.vel -== force / .t.mass;
+						};
+					};
+				`);
+			};
+			
+			this.Node(` .vel2 = {0,0}; .windshield = 0; `);
+			
+			if ( this.Light.cde ) this.Link(` .cde = 0 `);
+			
+			for (var j = 0; j < this.tiesteps; j++){
+				
+				
+				this.Link(`
+					
+					float2 dpos = .t.pos - .f.pos;
+					float2 dvel = .t.vel - .f.vel;
+					
+					float  dpos_dot = dot( dpos, dpos );
+					float      dist = sqrtf( dpos_dot );
+					
+					float abs_tonus = .tonus > 0 ? .tonus : - .tonus;
+					
+					
+					float l_dist = .dist * ( 1 + .tonus * tonus_dist_mul );
+					
+					if (check_robust && (abs(dist - l_dist) > .robust)){
+						.pow  = 0.0f;
+						.damp = 0.0f;
+					};
+					
+					float2 damp_force  = dpos * .damp * ( dvel.x * dpos.x + dvel.y * dpos.y ) / dpos_dot;
+					float2 vel         = (l_dist - dist) * ( .pow * ( 1 + abs_tonus * tonus_pow_mul ) ) * dpos;
+					vel               -= damp_force;
+					
+					.cde += 2 * length(damp_force);
+					
+					if (dist < cdist){
+						float2 norm  = dpos / dist;
+						vel         += ( .t.cpow + .f.cpow ) * ( cdist - dist ) * norm;
+					};
+					
+					vel /= tiesteps;
+					
+					if ( isfinite(vel) ){
+						.f.vel2 -== vel / .f.mass;
+						.t.vel2 +== vel / .t.mass;
+					};
+				`);
+				
+				if ( code ) code();
+				
+				this.Node({
+					'float k'         : this.movek / this.tiesteps,
+					
+				},`
+					if (isfinite( .vel2 )) .vel += .vel2;
+					.vel2 = {0,0};
+					
+					
+					.pos += .vel * k;
+				`);
+			};
+			
+			if ( this.frict < 1 ) this.Node(` .vel *= frict `);
+		};
+	},
+};

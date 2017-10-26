@@ -1,0 +1,278 @@
+module.exports = {
+	'int2  steps'      :   [2000,2000],
+	
+	'int   curStep'    :              0,
+	'int   creatures'  :          5000,
+	'int   populations':            25,
+	
+	'int   curSteps'   :              0,
+	
+	'float deadPart'   :    0.5,
+	
+	getCurSteps(){
+		this.curStep  = 0;
+		
+		this.curSteps = Math.floor( (1 - Math.sqrt( Math.sqrt( Math.random() )) ) * ( this.steps[1] - this.steps[0] ) + this.steps[0] );
+		log('next round! ' + this.curSteps );
+	},
+	
+	start( opt ){
+		this( this.creatures, ` Creature.generate(); `);
+		
+		this.Creature._godeep( scope => {
+			log( scope.alias + ': ' + scope.el.count );
+		});
+		
+		this.getCurSteps();
+	},
+	
+	Visual: {
+		'int width'      : 250,
+		'int height'     : 4000,
+		
+		'float2 shiftPos': [0,3000],
+		
+		Pixel: {
+			MAX: 1000000,
+			pos: 'vbo float2',
+			rgb: 'vbo float3',
+			tw : 'float2',
+			_tw: 'float2',
+		},
+		
+		Line: {
+			pos: 'vbo float2',
+			rgb: 'vbo float3',
+			t  : 'float2',
+			_t : 'float2',
+		},
+		
+		'float2 get( int2 pos )': `
+			some pixel = Pixel[ pos.y * width + pos.x ];
+			pixel {
+				return ._tw;
+			};
+		`,
+		'void set( int2 pos, float2 tw )': `
+			some pixel = Pixel[ pos.y * width + pos.x ];
+			pixel {
+				.tw  = tw;
+				.rgb = t2rgb(.tw.x ) * .tw.y;
+				
+			};
+		`,
+		
+		'float2 getLine( int pos )': `
+			some line = Line[ pos ];
+			line {
+				return ._t;
+			};
+		`,
+		
+		'float lineK': 0.25,
+		'void setLine( int pos, float2 t )': `
+			some line = Line[ pos ];
+			line {
+				.t      = t;
+				.pos.x  =     . * -1.5;
+				.pos.y  = width * 1.5 + 5 + .t.x * lineK;
+				.pos   += shiftPos;
+				.rgb    = t2rgb( .t.y );
+			};
+		`,
+		
+		scroll(){
+			this.Pixel(`._tw = .tw;`);
+			this.Pixel(`
+				int y = i / width;
+				int x = i % width;
+				
+				if ( y < height - 1 ){
+					set( {x,y + 1}, get( { x,y } ) );
+				};
+			`);
+			this.Line(`._t = .t;`);
+			this.Line(`
+				int y = .;
+				if ( y < height - 1 ){
+					setLine( y+1, getLine(y) );
+				};
+			`);
+		},
+		
+		go(){
+			this.Pixel( 1000000, `
+				Self.new {
+					.pos.x = -( . / width * 1.5 );
+					.pos.y = . % width * 1.5;
+					.pos  += shiftPos;
+					.tw    = {0.7,0};
+				};
+			`);
+			this.Line( this.height, `
+				Self.new {
+					
+					
+					
+					
+				};
+			`);
+			
+			
+			this.Render.pCloud([this.Pixel,'pos','rgb']);
+			this.Render.pCloud([this.Line ,'pos','rgb']);
+		},
+	},
+	
+	Population: {
+		where : 'int2',
+		best  : 'float',
+		best_t: 'float',
+	},
+	
+	nextRound(){
+		
+		
+		this.Population(` .delete(); `);
+		this.Population( this.populations, ` Self.new { .where = {-1,-1}; }; `);
+		
+		
+		this.Creature(`
+			.populationId = (int)( .t * (float)( Genesis.populations ) );
+			
+			
+			
+			
+			.fitnessValue2 = .fitness();
+			.fitnessValue  = .populationId * 10000 + .fitness();
+		`);
+		
+		this.Creature.orderBy('fitnessValue');
+		
+		
+		
+		this.Creature(`
+			some cr = Creature.ordered( i );
+			if ( i < n-1 ){
+				
+				
+				some crnext = Creature.ordered( i+1 );
+				if ( crnext.populationId != cr.populationId ){
+					Genesis.Population[     cr.populationId ].where.y = i;
+					Genesis.Population[ crnext.populationId ].where.x = i+1;
+				};
+			}else{
+				
+				
+				Genesis.Population[ cr.populationId ].where.y = i;
+			};
+			
+			if ( i == 0 ){
+				
+				
+				Genesis.Population[ cr.populationId ].where.x = 0;
+			};
+		`);
+		
+		this.Population(`
+			.best   = -Creature.ordered( .where.x ).fitnessValue2;
+			.best_t = Creature.ordered( .where.x ).t;
+		`);
+		
+		
+		
+		
+		
+		var best   = 0;
+		var best_t = 0;
+		var worst  = 10000;
+		
+		this.Population.el.arrs['best'  ].d2h();
+		this.Population.el.arrs['best_t'].d2h();
+		this.Population.el.arrs['best'  ].host.forEach( (fv,i) => {
+			if ( i < this.Population.el.count ){
+				if ( best  < fv){
+					best   = fv;
+					best_t = this.Population.el.arrs['best_t'].host[i];
+				};
+				if ( worst > fv) worst = fv;
+			};
+		});
+		
+		/*
+			this.Population.el.arrs['fitnessValue2'].host.forEach( fv => {
+				if ( best  < (-fv)) best  = (-fv);
+				if ( worst > (-fv)) worst = (-fv);
+			});
+		*/
+		
+		
+		
+		
+		this( this.Creature.el.count * this.deadPart, `
+			some pop = Population[ Creature[ Random.getInt( Creature.length ) ].populationId ];
+			
+			
+			
+			
+			Creature.ordered( pop.where.x + Random.gradient( pop.where.y - pop.where.x + 1 ) ).remove();
+		`);
+		
+		var forks = this.creatures - this.Creature.el.count;
+		
+		
+		this.Creature(`.kill();`);
+		this.Creature(`.born();`);
+		
+		
+		this.Creature( forks, { 'int Creature_length': this.Creature.el.count }, `
+			Creature[ Random.getInt( Creature_length ) ].fork();
+		`);
+		
+		
+		this.getCurSteps();
+		
+		
+		
+		this.Creature(`.fitnessValue = .genome.t; `);
+		this.Creature.orderBy('fitnessValue'); 
+		
+		this.Visual.scroll();
+		this.Visual( this.Visual.width, { 'float best': best - worst, 'float worst': worst }, `
+			
+			int creatureI = (int)(Creature.length * ( i / (float)(Visual.width) ));
+			
+			
+			some creature = Creature.ordered( creatureI );
+			some pop      = Population[ creature.populationId ];
+			
+			float w       = ( pop.best - worst ) / ( best - worst );
+			if ( w > 1 ) w = 1;
+			if ( w < 0 ) w = 0.25;
+			
+			
+			set({i,0}, { creature.genome.t, w } );
+		`);
+		
+		console.info( 'best_t', best_t );
+		
+		this.Visual( 1, { 'float best': best, 'float best_t': best_t }, `
+			setLine(0, { best, best_t } );
+		`);
+		
+		console.info( 'best:  ' + best  );
+		console.info( 'worst: ' + worst );
+	},
+	
+	animate(){
+		if ( this.curStep++ >= this.curSteps ){
+			this.nextRound();
+		};
+		this.Creature.animate();
+	},
+	
+	render(){
+		this.Creature.render();
+	},
+};
+

@@ -1,0 +1,115 @@
+var cu       = use('node-cuda');
+
+module.exports = function( opt ){
+	var gridsize = 512;
+	var gridstep = 3;
+	
+	var scope = _.om( opt, {
+		Vec: {
+			gph: 'int',
+			gpi: 'int',
+			gpn: 'int',
+		},
+		
+		Grid: {
+			MAX: 512 * 512,
+			
+			gps: 'int',
+			gpe: 'int',
+			gpc: 'int',
+		},
+		
+		'int2 calcGridPos( float2 p )': `
+			int2 gridPos;
+			
+			gridPos.x = floor(p.x / ${gridstep} );
+			gridPos.y = floor(p.y / ${gridstep} );
+			
+			return gridPos;
+		`,
+		
+		'int calcGridHash( int2 gridPos )': `
+			gridPos.x = gridPos.x & ( ${gridsize} - 1 );
+			gridPos.y = gridPos.y & ( ${gridsize} - 1 );
+			
+			return ( gridPos.y * ${gridsize} ) + gridPos.x;
+		`,
+		
+		'float2 collideOne ( int2 gp, int i_ )': `
+			uint h = calcGridHash(gp);
+			Grid[ h ] {
+				
+				int si = .gps;
+				
+				float2 fe = { 0,0 };
+				
+				if ( si != 0xffffffff ){
+					int ei = .gpe;
+					
+					for ( int j = si; j < ei; j++ ){
+						if ( j != i_ ){
+							int fi = Vec[i_].gpi;
+							int ti = Vec[j ].gpi;
+							
+							float2 dpos = iPos( fi ) - iPos( ti );
+							float  dist = length( dpos );
+							
+							if ( dist < cdist ){
+								fe += collideCells( fi, ti, dist, dpos );
+							};
+						};
+					};
+				};
+				
+				return fe;
+			};
+		`,
+		
+		buildGrid(){
+			this.Grid.el.count = 512 * 512;
+			this.Vec .el.count = this.uscope.el.count;
+			
+			this.Grid(`
+				.gpc = 0;
+				.gps = 0xffffffff;
+			`);
+			
+			this.Vec(`
+				int h = calcGridHash( calcGridPos( iPos(i) ) );
+				
+				.gph = h;
+				.gpn = Grid[h].gpc +== 1;
+			`);
+			
+			cu.thrust_inclusiveScan(
+				this.Grid.el.arrs['gpc'].device,
+				this.Grid.el.count,
+				this.Grid.el.arrs['gpe'].device
+			);
+			
+			this.Grid(` if ( .gpc > 0 ) .gps = .gpe - .gpc; `);
+			
+			this.Vec(`
+				int a = Grid[ .gph ].gps + .gpn;
+				Vec[ a ].gpi = i;
+			`);
+		},
+		
+		collide(){
+			this.Vec(`
+				int2   gp  = calcGridPos( iPos( .gpi ) );
+				float2 vel = { 0, 0 };
+				
+				for ( int y = -1; y <= 1; y++ ){
+				for ( int x = -1; x <= 1; x++ ){
+						int2 np = gp + make_int2( x, y );
+						vel    += collideOne( np, i );
+				};};
+				
+				additive( Vec[i].gpi, vel );
+			`);
+		},
+	});
+	
+	return scope;
+};

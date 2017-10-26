@@ -1,0 +1,63 @@
+module.exports = {
+	'some .born()'      : `VIRTUAL`, 
+	'void .kill()'      : `VIRTUAL`, 
+	
+	'void .remove()': `
+		.kill(); 
+		.genome.remove(); 
+		.delete();
+	`,
+	
+	genome            : 'Genome @creature',
+	Genome            : {
+		'some generate()': `VIRTUAL`, 
+		'void .mutate()' : `VIRTUAL`,
+		'some .clone()'  : `VIRTUAL`,
+		'void .remove()' : `VIRTUAL`, 
+	},
+	
+	'float .fitness()' : `VIRTUAL`, 
+	fitnessValue       : 'float', 
+	fitnessValue2      : 'float', 
+	populationId       : 'int', 
+	
+	orderBy(field){
+		this(` .order = .; `);
+		CUCU.thrust_floatSort_int( this.Creature.el.arrs[field].device, this.Creature.el.count, this.Creature.el.arrs.order.device );
+	},
+	
+	
+	order              : 'int', 
+	orderBy(field){
+		this(` .order = .; `);
+		CUCU.thrust_floatSort_int( this.Creature.el.arrs[field].device, this.Creature.el.count, this.Creature.el.arrs.order.device );
+	},
+	'some ordered(int ii)': `return Self[ Self[ ii ].order ];`,
+	
+	
+	t: 'float',
+	
+	'some .fork()'   : `
+		some parent = .;
+		
+		Self.new {
+			.genome = parent.genome.clone();
+			.genome.mutate();
+			.born();
+			
+			return .;
+		};
+	`,
+	
+	'some generate()': `
+		Self.new {
+			.genome = Genome.generate();
+			.born();
+			
+			return .;
+		};
+	`,
+	
+	animate(){ throw Error('VIRTUAL'); },
+	render (){ throw Error('VIRTUAL'); },
+};

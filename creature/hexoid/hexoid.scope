@@ -1,0 +1,326 @@
+module.exports = {
+	'float cosmicSize': 20,
+	
+	'float bodySize'  : 15,
+	
+	'int2 nodesCount': [ 20,40],
+	'int2 linksCount': [ 1,1],
+	
+	'int2 nodesCountMind':  [16,32],
+	'int2 linksCountMind':  [32,64],
+	
+	'int2 actorsCount' : [5, 10],
+	'int2 receptsCount': [0, 3],
+	
+	'int2 nodesToMuscle': [2,5],
+	
+	'float tonusSpeed':   0.05,
+	
+	'float node_cpow':        50,
+	'float link_pow' :        50,
+	'float link_damp':       0.1,
+	
+	'int biosSteps': 1,
+	
+	extends: use('creature'),
+	
+	Bios   : {
+		extends: use('engine/cosmos'),
+		
+		
+		'float tonus_dist_mul':    1,
+		
+		'float tonus_pow_mul' :    3,
+		
+		
+		Light: {
+			
+			'float cde': 0.01,
+		},
+		
+		Node: {
+			dark  : 'float',
+			tonus : 'float',
+			t     : 'float',
+			
+			strong: 'float',
+		},
+	},
+	Neuros : use('engine/neuros'),
+	
+	
+	'float tonusRenderShiftK': 0.3,
+	'float Light_cde': 0.005,
+	render(){
+		this.Bios  .render(() => {
+			this.Bios.Node(`
+				float w = .cde * Light_cde;
+				if (w>0.8) w = 0.8;
+				.rgb = tw2rgb( .t + .tonus * tonusRenderShiftK, w );
+				
+				
+				.dark = ( .strong - 1.0f ) * 3.0f;
+				
+				if ( .dark < 0 ){ .dark = 0; };
+				if ( .dark > 1 ){ .dark = 1; };
+				
+				
+				.rgb *= ( 1 - .dark * 0.7 );
+				
+				
+				
+			`);
+			
+		});
+		
+		
+		this.Neuros.render();
+		
+	},
+	
+	animate(){
+		this.Neuros.animate();
+		for (var s = 0; s < this.biosSteps; s++ ){
+			this.Mind.animate();
+			
+			
+			
+			
+			this.Bios.tick(() => {
+				
+				this.Body.Node({
+					'float gravity'    : 0.35,
+					'float undeepk'    :   55,
+					'float deepfrictkY':  0.4,
+					'float deepfrictkX': 0.02,
+				},`
+					.vel.y -= gravity;
+					
+					float deep = .gpos - .pos.y;
+					
+					if (deep > 0){
+						.vel.y += deep * undeepk;
+					};
+					
+					if (deep > 0){
+						.vel    *= deepfrictkY;
+						.vel2   *= deepfrictkY;
+						.vel.x  *= deepfrictkX;
+						.vel2.x *= deepfrictkX;
+					};
+				`);
+			});
+		};
+	},
+	
+	
+	
+	
+	
+	Absi : use('lib/absi'),
+	where: 'float2',
+	
+	
+	'some .born()': `
+		.where = ri2xy( cosmicSize, . );
+		
+		float2 where  = .where;
+		some   cosmic = .;
+		
+		.t = cosmic.genome.t;
+		
+		.body.new {
+			some genome = cosmic.genome.body;
+			some body   = .;
+			
+			float gpos = 0;
+			genome.nodes {
+				if ( .pos.y > gpos ){
+					gpos = .pos.y;
+				};
+			};
+			
+			
+			.nodes.allocate( genome.nodes.length, int x ) {
+				some gen  = genome.nodes[x];
+				
+				.pos      = where   + gen.pos;
+				.cpow     = gen.cpow;
+				.mass     = gen.mass;
+				
+				.strong   = gen.strong; 
+				
+				
+				
+				.t        = cosmic.genome.t; 
+				
+				.dark = 0;
+				
+				.gpos     = where.y - gpos - 1;
+				
+				.subspace = body;
+			};
+			
+			.links.allocate( genome.links.length, int x ) {
+				some gen2 = genome.links[x];
+				
+				.f = body.nodes[ gen2.f.i ];
+				.t = body.nodes[ gen2.t.i ];
+				
+				.dist   = gen2.dist;
+				.pow    = gen2.pow;
+				.damp   = gen2.damp;
+				.robust = gen2.robust;
+			};
+		};
+		
+		.mind.new {
+			some genome2 = cosmic.genome.mind;
+			some mind    = .;
+			
+			.nodes.allocate( genome2.nodes.length, int x ) {
+				some gen3  = genome2.nodes[x];
+				
+				.pos   = where + gen3.pos;
+				.v     = gen3.v;
+				.k     = gen3.k;
+				.frict = gen3.frict;
+				.speed = gen3.speed;
+			};
+			
+			.links.allocate( genome2.links.length, int x ) {
+				some gen4 = genome2.links[x];
+				
+				.f = mind.nodes[ gen4.f.i ];
+				.t = mind.nodes[ gen4.t.i ];
+				
+				.k = gen4.k;
+			};
+			
+			.actors.allocate( genome2.actors.length, int x ) {
+				some gen5 = genome2.actors[x];
+				
+				.neuron = mind.nodes[ gen5.neuron.i ];
+				
+				
+				some actor = .;
+				
+				gen5.links {
+					some link = body.links[ .i ];
+					actor.links.push( link );
+				};
+				
+				gen5.nodes {
+					some node = body.nodes[ .i ];
+					actor.nodes.push( node );
+				};
+			};
+			
+			.recepts.allocate( genome2.recepts.length, int x ) {
+				some gen6 = genome2.recepts[x];
+				
+				.neuronX = mind.nodes[ gen6.neuronX.i ];
+				.neuronY = mind.nodes[ gen6.neuronY.i ];
+				.node    = body.nodes[ gen6.node.i    ];
+			};
+		};
+		
+		return .;
+	`,
+	
+	
+	Genome: use('genome'),
+	
+	
+	'void .kill()': `
+		.body {
+			.nodes { .delete(); };
+			.links { .delete(); };
+			.delete();
+		};
+		
+		.mind {
+			.nodes   { .delete(); };
+			.links   { .delete(); };
+			.actors  { .delete(); };
+			.recepts { .delete(); };
+			.delete();
+		};
+	`,
+	
+	'float .fitness()': `
+		float pos = 1000000;
+		
+		
+		.body.nodes {
+			if ( .pos.x < pos ) pos = .pos.x;
+		};
+		
+		return ( .where.x - pos );
+		
+	`,
+	
+	
+	
+	body: 'Body @cosmic',
+	Body: {
+		nodes  : ['Node @body'],
+		Node   : 'Bios.Node',
+		
+		links  : ['Link @body'],
+		Link   : 'Bios.Link',
+		
+	},
+	
+	mind: 'Mind',
+	Mind: {
+		
+		Node: 'Neuros.Node',
+		Link: 'Neuros.Link',
+		
+		nodes: ['Node @mind'],
+		links: ['Link @mind'],
+		
+		
+		actors: ['Actor @mind'],
+		Actor : {
+			MAX: Scope_MAX_BIG,
+			
+			neuron:  'Mind.Node',
+			
+			
+			links : ['Body.Link'],
+			nodes : ['Body.Node'],
+		},
+		
+		recepts: ['Recept @mind'],
+		Recept : {
+			MAX: Scope_MAX_BIG,
+			
+			neuronX: 'Mind.Node',
+			neuronY: 'Mind.Node',
+			node   : 'Body.Node',
+		},
+		
+		animate(){
+			this.Actor (`
+				float v = .neuron.v;
+				
+				float avg_tonus = 0;
+				.links {
+					.tonus    += ( v - .tonus ) * tonusSpeed;
+					
+					avg_tonus += .tonus;
+				};
+				
+				avg_tonus /= (float)( .links.length );
+				
+				.nodes { .tonus = avg_tonus; }; 
+			`);
+			this.Recept(`
+				.neuronX.v = .node.vel.x;
+				.neuronY.v = .node.vel.y;
+			`);
+		},
+	},
+};

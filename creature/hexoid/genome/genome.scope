@@ -1,0 +1,79 @@
+module.exports = {
+	'void .remove()': `
+		.body.remove();
+		.mind.remove();
+		.delete();
+	`,
+	
+	t: 'float',
+	
+	body: 'Body',
+	Body: use('body'),
+	
+	mind: 'Mind',
+	Mind: use('mind'),
+	
+	
+	'some generate()': `
+		Self.new {
+			some genome = .;
+			
+			.t = Random.get();
+			
+			
+			.body = Body.generate();
+			.body { .genome = genome; }; 
+			
+			.mind = Mind.generate();
+			.mind { .genome = genome; }; 
+			
+			
+			.mind {
+				some mind = .;
+				some body = genome.body;
+				
+				int ppC = Random.between( actorsCount );
+				for ( int xx = 0; xx < ppC; xx++ ){
+					.addActor( genome );
+				};
+				.actors.vectorize();
+				
+				.recepts.allocate( Random.between( receptsCount ), int x){
+					.neuronX = mind.nodes[ Random.getInt( mind.nodes.length ) ];
+					.neuronY = mind.nodes[ Random.getInt( mind.nodes.length ) ];
+					.node    = body.nodes[ Random.getInt( body.nodes.length ) ];
+				};
+			};
+			
+			return genome;
+		};
+	`,
+	
+	'float muTemp'    : 0.005,
+	
+	'void .mutate()': `
+		some genome = .;
+		
+		
+		.t += Random.get() * muTemp * 2 - muTemp;
+		if ( .t >= 1 ) .t -= 1;
+		if ( .t <  0 ) .t += 1;
+		
+		.body.mutate();
+		.mind.mutate();
+	`,
+	
+	'some .clone()' : `
+		some source = .;
+		
+		Self.new {
+			.t = source.t;
+			
+			.body = source.body.clone();
+			
+			.mind = source.mind.clone( .body );
+			
+			return .;
+		};
+	`,
+};
